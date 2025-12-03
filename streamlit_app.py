@@ -5,7 +5,6 @@ import hashlib
 import time
 import random
 import urllib.parse
-import re
 from datetime import datetime
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
@@ -108,6 +107,7 @@ def load_draw(draw_id: str, admin_pin: str):
 
     try:
         # 1. Busca o sorteio pelo ID
+        # .single() retorna um único objeto ou erro se não encontrar
         res = supabase.table("draws").select("*").eq("id", draw_id).execute()
         
         if not res.data or len(res.data) == 0:
@@ -122,6 +122,7 @@ def load_draw(draw_id: str, admin_pin: str):
         return draw, None
         
     except Exception as e:
+        # Verifica se é erro de UUID inválido
         if "invalid input syntax for type uuid" in str(e):
             return None, "ID inválido."
         return None, f"Erro ao carregar: {str(e)}"
@@ -262,46 +263,19 @@ def clean_names(text):
     return cleaned
 
 def validate_names(names):
-    """
-    Valida regras:
-    1. Mínimo 3 participantes
-    2. Sem duplicatas
-    """
-    if len(names) < 3:
-        return False, "É necessário ter pelo menos 3 participantes para um sorteio válido."
-
-    # Case insensitive check for duplicates just in case
-    names_lower = [n.lower() for n in names]
-    duplicates = set([x for x in names if names_lower.count(x.lower()) > 1])
-
-    if duplicates:
-        return False, f"Você tem nomes duplicados: {', '.join(duplicates)}. Corrija antes de gerar o sorteio."
-
+    duplicates = set([x for x in names if names.count(x) > 1])
+    if duplicates: return False, f"Nomes duplicados: {', '.join(duplicates)}"
+    if len(names) < 3: return False, "Mínimo de 3 participantes."
     return True, "OK"
 
 def generate_pin():
     return f"{random.randint(0, 999999):06d}"
 
-def generate_derangement(names):
-    """
-    Gera um sorteio válido onde ninguém tira a si mesmo (Derangement).
-    Tenta embaralhar até encontrar uma permutação válida.
-    """
-    pool = names[:]
-    max_attempts = 10000
-    
-    for _ in range(max_attempts):
-        random.shuffle(pool)
-        # Verifica se alguém tirou a si mesmo
-        if all(n != p for n, p in zip(names, pool)):
-            return pool
-            
-    return None
-
 def format_date(ts_iso):
     """Formata data ISO para DD/MM/AAAA HH:mm"""
     if not ts_iso: return ""
     try:
+        # Substitui Z por +00:00 para compatibilidade com versões antigas do Python se necessário
         dt = datetime.fromisoformat(ts_iso.replace('Z', '+00:00'))
         return dt.strftime('%d/%m/%Y às %H:%M')
     except:
@@ -314,182 +288,127 @@ def format_date(ts_iso):
 def inject_css():
     st.markdown("""
     <style>
-    /*
-       PALETA MODERNA E ELEGANTE
-       Fundo: #F7F5EB (Creme suave)
-       Card Principal: #243447 (Azul Grafite Profundo)
-       Highlight: #1E90FF (Azul Dodger Moderno)
-       Accent: #E63946 (Vermelho Suave)
-    */
+    /* Variáveis Globais com a nova paleta */
     :root {
-        --bg-color: #F7F5EB;
-        --card-bg: #243447;
-        --card-text: #FFFFFF;
+        --bg-color: #F8F5E5;
+        --card-color: #1E1E24;
+        --text-color: #333333;
+        --text-inverted: #F1FAEE;
         --accent-color: #E63946;
-        --highlight-color: #1E90FF;
-        --shhh-bg: #FFE8A0;
-        --shhh-text: #333333;
+        --success-color: #2A9D8F;
+        --alert-color: #FFDD99;
+        --secondary-btn: #457B9D;
     }
 
-    /* Global */
+    /* Configuração Geral */
     .stApp {
         background-color: var(--bg-color);
-        color: #333;
+        color: var(--text-color);
         font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     }
 
-    /* Headers */
+    /* Títulos */
     h1, h2, h3 {
         color: var(--accent-color) !important;
-        font-weight: 700;
-        text-align: center;
-    }
-
-    /* CARD DE REVELAÇÃO (Novo Estilo) */
-    .reveal-card {
-        background-color: var(--card-bg);
-        color: var(--card-text);
-        padding: 40px 20px;
-        border-radius: 16px;
-        text-align: center;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.15);
-        margin: 20px 0;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 15px;
-    }
-
-    .reveal-title {
-        color: #A0AAB5;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-        font-size: 14px;
-        font-weight: 600;
-        margin: 0;
-    }
-
-    .name-badge {
-        background-color: var(--highlight-color);
-        color: white;
-        font-size: 28px;
         font-weight: 800;
-        padding: 15px 30px;
-        border-radius: 50px;
-        box-shadow: 0 4px 10px rgba(30, 144, 255, 0.4);
-        margin: 10px 0;
-        display: inline-block;
-    }
-
-    .shhh-box {
-        background-color: var(--shhh-bg);
-        color: var(--shhh-text);
-        padding: 8px 16px;
-        border-radius: 8px;
-        font-weight: 600;
-        font-size: 14px;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        margin-top: 10px;
-    }
-
-    /* CARD DE ESPERA (Ainda não...) */
-    .wait-card {
-        background-color: #FFF3CD;
-        border: 2px solid #FFEEBA;
-        color: #333;
-        padding: 30px;
-        border-radius: 12px;
         text-align: center;
-        margin-top: 20px;
-    }
-    .wait-title {
-        color: #856404 !important;
-        font-weight: 800;
-        margin-top: 0;
-    }
-    .wait-text {
-        color: #444;
-        margin-bottom: 5px;
-    }
-    .wait-date {
-        color: #333;
-        font-weight: 700;
-        font-size: 24px;
-    }
-
-    /* Card Padrão (Admin/Login) */
-    .standard-card {
-        background-color: white;
-        padding: 25px;
-        border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
         margin-bottom: 20px;
-        text-align: center;
-        border: 1px solid #EAEAEA;
     }
 
     /* Inputs */
     .stTextInput input, .stTextArea textarea, .stDateInput input, .stTimeInput input {
+        background-color: white !important;
+        color: #333 !important;
+        border: 2px solid #ddd;
         border-radius: 8px;
-        border: 1px solid #DDD;
         padding: 10px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
     }
-    .stTextInput input:focus {
-        border-color: var(--highlight-color) !important;
-        box-shadow: 0 0 0 2px rgba(30, 144, 255, 0.2) !important;
+    .stTextInput input:focus, .stTextArea textarea:focus {
+        border-color: var(--accent-color) !important;
+        box-shadow: 0 0 0 2px rgba(230, 57, 70, 0.2) !important;
     }
 
-    /* Botões */
+    /* Botão Primário */
     div.stButton > button[kind="primary"] {
         background-color: var(--accent-color) !important;
         color: white !important;
-        border-radius: 8px;
         border: none;
         padding: 0.6rem 1.2rem;
-        font-weight: 700;
-        transition: transform 0.1s;
+        border-radius: 8px;
+        font-weight: bold;
+        transition: all 0.2s ease;
+        width: 100%;
     }
     div.stButton > button[kind="primary"]:hover {
-        transform: translateY(-2px);
         background-color: #D62839 !important;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
     }
 
+    /* Botão Secundário */
     div.stButton > button[kind="secondary"] {
-        background-color: white !important;
-        color: #555 !important;
-        border: 1px solid #DDD !important;
+        background-color: var(--secondary-btn) !important;
+        color: white !important;
+        border: none;
+        padding: 0.6rem 1.2rem;
         border-radius: 8px;
-        font-weight: 600;
+        font-weight: bold;
+        transition: all 0.2s ease;
+        width: 100%;
     }
     div.stButton > button[kind="secondary"]:hover {
-        border-color: #999 !important;
-        color: #333 !important;
+        filter: brightness(1.1);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
     }
 
-    /* Footer */
+    /* Cards Personalizados */
+    .custom-card {
+        background-color: var(--card-color);
+        color: var(--text-inverted);
+        padding: 25px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+        text-align: center;
+    }
+    .custom-card h3, .custom-card h2 { color: var(--alert-color) !important; margin: 0 0 10px 0; }
+    .custom-card p { color: #ccc !important; font-size: 0.95rem; }
+
+    /* Rodapé */
     .footer {
         text-align: center;
+        color: #999;
         font-size: 12px;
-        color: #AAA;
-        margin-top: 60px;
-        padding-top: 20px;
-        border-top: 1px solid #EAEAEA;
+        margin-top: 50px;
+        padding: 20px;
+        border-top: 1px solid #ddd;
+        opacity: 0.8;
     }
 
-    /* Ajustes de layout */
-    .block-container {
-        padding-top: 3rem;
-        padding-bottom: 3rem;
-        max-width: 600px;
+    /* Expander */
+    .streamlit-expanderHeader {
+        background-color: white !important;
+        border-radius: 8px;
+        color: #333 !important;
+        font-weight: 600;
+        border: 1px solid #eee;
     }
+
+    /* Centralizar conteúdo */
+    [data-testid="stVerticalBlock"] > [style*="flex-direction: column;"] > [data-testid="stVerticalBlock"] {
+        align-items: center;
+    }
+
     </style>
     """, unsafe_allow_html=True)
 
 def main():
     inject_css()
 
+    # Roteamento via query params
+    # Esperado: ?id=<uuid_participante>
     query_params = st.query_params
     p_id = query_params.get("id", None)
 
@@ -500,7 +419,7 @@ def main():
 
     st.markdown("""
     <div class='footer'>
-        Amigo Secreto v0.8.0 • Design Premium<br/>
+        Amigo Secreto v0.6.0 • PIN Mutável<br/>
         Segurança Reforçada: Admin não vê PIN final.
     </div>
     """, unsafe_allow_html=True)
@@ -508,68 +427,38 @@ def main():
 # --- ADMIN VIEWS ---
 
 def view_admin():
-    # Inicializa sessão
-    if 'admin_logged' not in st.session_state:
-        st.session_state.admin_logged = False
     if 'admin_auth' not in st.session_state: st.session_state.admin_auth = False
     if 'current_draw_id' not in st.session_state: st.session_state.current_draw_id = None
-    if 'admin_pin' not in st.session_state: st.session_state.admin_pin = "654321"
+    if 'admin_pin' not in st.session_state: st.session_state.admin_pin = "654321" # Default para Beta
 
-    # TELA DE LOGIN GERAL DO ADMIN
-    if not st.session_state.admin_logged:
-        st.title("🛡️ Acesso Restrito")
-        st.markdown("<div class='standard-card'>", unsafe_allow_html=True)
-        st.markdown("<p>Digite o PIN de Administrador para acessar a configuração.</p>", unsafe_allow_html=True)
-
-        pin = st.text_input("PIN Admin", type="password", max_chars=6, key="global_admin_pin")
-
-        if st.button("ENTRAR", type="primary"):
-            # Verifica PIN padrão (654321) ou personalizado se já definido
-            # Como ainda não carregamos sorteio, validamos contra o padrão de instalação
-            # Ou, se o usuário já tiver logado antes e a sessão caiu?
-            # Por simplicidade e requisito: "O PIN padrão continua sendo 654321"
-            if pin == "654321":
-                st.session_state.admin_logged = True
-                st.rerun()
-            else:
-                st.error("PIN incorreto.")
-        st.markdown("</div>", unsafe_allow_html=True)
-        return
-
-    # SE LOGADO: MOSTRA O RESTO
-
+    # 1. Configuração (Novo Sorteio)
     if not st.session_state.current_draw_id:
         st.title("🎅 Configurar Sorteio")
         
         with st.container():
-            st.markdown("<p style='text-align:center; color:#666; margin-bottom:30px;'>Crie uma experiência mágica e organizada.</p>", unsafe_allow_html=True)
-
+            st.markdown("<p style='text-align:center; color:#555;'>Crie um sorteio e compartilhe a magia do Natal!</p>", unsafe_allow_html=True)
             names_input = st.text_area("Participantes (um por linha)", height=150, placeholder="João\nMaria\nPedro", label_visibility="visible")
             
             col1, col2 = st.columns(2)
+            # DATA FORMATO DD/MM/AAAA
             with col1: reveal_date = st.date_input("Dia Revelação", value=None, format="DD/MM/YYYY")
             with col2: reveal_time = st.time_input("Hora Revelação", value=None)
             
             admin_pin_input = st.text_input("PIN Admin (Padrão 654321)", value="654321", max_chars=6, type="password")
 
             if st.button("🎲 GERAR SORTEIO", type="primary"):
-                # 1. Normalizar nomes
                 names = clean_names(names_input)
-                
-                # 2. Validar Regras (Min 3, Sem Duplicados)
                 valid, msg = validate_names(names)
                 if not valid:
                     st.error(msg)
                     return
                 
-                # 3. Sorteio (Derangement - Ciclo Fechado ou Permutação válida)
-                pool = generate_derangement(names)
+                # Sorteio Local
+                pool = names[:]
+                random.shuffle(pool)
+                while any(n == p for n, p in zip(names, pool)):
+                    random.shuffle(pool)
 
-                if not pool:
-                    st.error("Não foi possível gerar uma combinação válida. Tente novamente.")
-                    return
-
-                # 4. Preparar Pares
                 pairs = []
                 for i, name in enumerate(names):
                     pairs.append({
@@ -578,18 +467,18 @@ def view_admin():
                         'pin': generate_pin() # PIN Inicial
                     })
 
-                # 5. Salvar DB
+                # Salvar DB
                 ts_ms = None
                 if reveal_date and reveal_time:
                     dt = datetime.combine(reveal_date, reveal_time)
                     ts_ms = int(dt.timestamp() * 1000)
 
-                with st.spinner("Gerando envelopes seguros..."):
+                with st.spinner("Salvando..."):
                     draw_id = create_draw_in_db(admin_pin_input, ts_ms, pairs)
                     if draw_id:
                         st.session_state.current_draw_id = draw_id
                         st.session_state.admin_auth = True
-                        st.session_state.admin_pin = admin_pin_input
+                        st.session_state.admin_pin = admin_pin_input # Guarda PIN do Admin para Recovery
                         st.rerun()
                     else:
                         st.error("Erro ao salvar no banco.")
@@ -600,12 +489,14 @@ def view_admin():
             dpin = st.text_input("PIN Admin para Acesso", type="password")
             if st.button("Carregar", type="secondary"):
                 if did and len(dpin) == 6:
+                    # CORREÇÃO 2: Implementando load_draw corretamente
                     draw, error_msg = load_draw(did, dpin)
+
                     if draw:
                         st.session_state.current_draw_id = draw['id']
                         st.session_state.admin_auth = True
                         st.session_state.admin_pin = dpin
-                        st.success("Sorteio carregado!")
+                        st.success("Sorteio carregado com sucesso!")
                         time.sleep(1)
                         st.rerun()
                     else:
@@ -613,15 +504,15 @@ def view_admin():
                 else:
                     st.warning("Preencha ID e PIN corretamente.")
 
+    # 2. Dashboard
     else:
-        # DASHBOARD
         draw_id = st.session_state.current_draw_id
         st.title("📋 Painel Admin")
-        st.markdown(f"<div style='text-align:center; color:#777; font-size:14px; margin-bottom:20px;'>ID: <code>{draw_id}</code></div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='background:#fff; padding:10px; border-radius:8px; border:1px solid #ddd; text-align:center; color:#333; margin-bottom:20px;'>ID Sorteio: <b>{draw_id}</b></div>", unsafe_allow_html=True)
         
         participants = get_draw_participants(draw_id)
         if not participants:
-            st.error("Erro ao buscar dados.")
+            st.error("Nenhum participante encontrado (ou erro de conexão).")
             if st.button("Voltar"):
                 st.session_state.current_draw_id = None
                 st.rerun()
@@ -633,40 +524,54 @@ def view_admin():
             with st.expander(f"👤 {p['name']}", expanded=False):
                 link = f"{base_url}/?id={p['id']}"
 
+                # Exibe PIN Inicial se ainda não trocou
                 if p['must_change_pin']:
                     pin_display = f"🔑 PIN Inicial: **{p['pin_initial']}**"
                     status = "<span style='color:#E63946; font-weight:bold;'>🟡 Aguardando troca</span>"
                 else:
-                    pin_display = "🔒 PIN Definido (Privado)"
+                    pin_display = "🔒 PIN Definido pelo usuário (Oculto)"
                     status = "<span style='color:#2A9D8F; font-weight:bold;'>✅ Protegido</span>"
 
                 msg = f"Olá {p['name']}! 🎄\nSeu link: {link}\nPIN Inicial: {p['pin_initial']}"
 
                 st.markdown(f"Status: {status}", unsafe_allow_html=True)
-                st.markdown(pin_display)
+                st.write(pin_display)
                 st.text_input("Link", value=link, key=f"lk_{p['id']}")
                 st.code(msg)
 
+                # Botão Resetar
                 st.markdown("#### 🛠️ Zona de Perigo")
-                if st.button("🔄 Resetar PIN", key=f"rst_{p['id']}", type="primary"):
+
+                # Lógica de Confirmação para evitar cliques acidentais
+                if st.button("🔄 Resetar PIN (Gerar Novo)", key=f"rst_{p['id']}", type="primary"):
+                    # 1. Recuperar Admin PIN da sessão
                     master_pin = st.session_state.admin_pin
+
+                    # 2. Ler blob de recuperação
                     admin_blob = p.get('admin_recovery_blob')
                     if not admin_blob:
-                        st.error("Sem dados de recuperação.")
+                        st.error("Erro: Este sorteio foi criado numa versão antiga sem recuperação.")
                     else:
+                        # 3. Decriptar target usando Admin PIN
                         target_plaintext = decrypt_string(admin_blob, master_pin)
+
                         if not target_plaintext:
-                            st.error("PIN Admin inválido.")
+                            st.error("PIN Admin incorreto ou dados corrompidos. Não foi possível recuperar.")
                         else:
+                            # 4. Gerar Novo PIN Inicial
                             new_initial = generate_pin()
+
+                            # 5. Encriptar target com novo PIN Inicial
                             new_enc_target = encrypt_string(target_plaintext, new_initial)
+
+                            # 6. Salvar no Banco
                             if admin_reset_pin_db(p['id'], new_initial, new_enc_target):
-                                st.success(f"Novo PIN: {new_initial}")
-                                st.info("Envie este novo PIN para o usuário.")
+                                st.success(f"PIN Resetado com Sucesso! Novo PIN: {new_initial}")
+                                st.info("Copie o novo PIN e envie para o usuário.")
                                 time.sleep(2)
                                 st.rerun()
                             else:
-                                st.error("Erro no banco.")
+                                st.error("Falha ao atualizar banco de dados.")
 
         if st.button("Sair", type="secondary"):
             st.session_state.clear()
@@ -675,31 +580,30 @@ def view_admin():
 # --- PARTICIPANT VIEWS ---
 
 def view_participant(p_id):
+    # Carregar dados
     p = get_participant(p_id)
     if not p:
-        st.error("Link inválido ou não encontrado.")
+        st.error("Link inválido ou participante não encontrado.")
         return
 
-    # Header de Segurança
     st.markdown("""
-    <div style='text-align: center; margin-bottom: 20px;'>
-        <span style='background-color:#E8F5E9; color:#2E7D32; padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; letter-spacing: 1px;'>🔒 AMBIENTE SEGURO</span>
+    <div style='background-color: #1E1E24; padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 20px;'>
+        <span style='color: #FFCA3A; font-weight: bold;'>🔒 AMBIENTE SEGURO</span>
     </div>
     """, unsafe_allow_html=True)
     
     st.title(f"Olá, {p['name']}!")
 
+    # ESTADO: Auth
     if 'user_auth' not in st.session_state: st.session_state.user_auth = False
     
     # TELA 1: LOGIN
     if not st.session_state.user_auth:
-        st.markdown("<div class='standard-card'>", unsafe_allow_html=True)
-        st.markdown("### Digite seu PIN")
-        st.markdown("<p style='color:#666'>Use o PIN recebido para abrir seu envelope.</p>", unsafe_allow_html=True)
-
-        pin_input = st.text_input("PIN", max_chars=6, type="password", key="login_pin", label_visibility="collapsed")
+        st.markdown("<p style='text-align:center'>Digite seu PIN para entrar.</p>", unsafe_allow_html=True)
+        pin_input = st.text_input("PIN", max_chars=6, type="password", key="login_pin")
         
-        if st.button("ABRIR ENVELOPE", type="primary"):
+        if st.button("ENTRAR", type="primary"):
+            # Verifica qual PIN usar
             if p['must_change_pin']:
                 expected = p['pin_initial']
             else:
@@ -707,23 +611,20 @@ def view_participant(p_id):
 
             if pin_input == expected:
                 st.session_state.user_auth = True
-                st.session_state.current_pin = pin_input
+                st.session_state.current_pin = pin_input # Guarda PIN na sessão (memória volátil) para decriptar depois
                 st.rerun()
             else:
                 st.error("PIN incorreto.")
-        st.markdown("</div>", unsafe_allow_html=True)
         return
 
     # TELA 2: TROCA OBRIGATÓRIA
     if p['must_change_pin']:
-        st.markdown("<div class='standard-card' style='border-left: 5px solid #FFCA3A;'>", unsafe_allow_html=True)
-        st.markdown("### ⚠️ Defina sua Senha Secreta")
-        st.markdown("<p>Para garantir que ninguém (nem o Admin) veja quem você tirou, defina um novo PIN exclusivo.</p>", unsafe_allow_html=True)
+        st.warning("⚠️ Por segurança, você deve definir um novo PIN secreto.")
         
-        new_pin_1 = st.text_input("Novo PIN (6 números)", max_chars=6, type="password", key="np1")
+        new_pin_1 = st.text_input("Novo PIN (6 dígitos)", max_chars=6, type="password", key="np1")
         new_pin_2 = st.text_input("Confirme o PIN", max_chars=6, type="password", key="np2")
         
-        if st.button("PROTEGER E ABRIR", type="primary"):
+        if st.button("DEFINIR SENHA E ABRIR", type="primary"):
             if len(new_pin_1) != 6 or not new_pin_1.isdigit():
                 st.error("O PIN deve ter 6 números.")
                 return
@@ -731,69 +632,68 @@ def view_participant(p_id):
                 st.error("Os PINs não coincidem.")
                 return
             if new_pin_1 == p['pin_initial']:
-                st.error("Use um PIN diferente do inicial.")
+                st.error("O novo PIN deve ser diferente do inicial.")
                 return
             
+            # 1. Decriptar target com PIN inicial
             target = decrypt_string(p['encrypted_target'], p['pin_initial'])
             if not target:
-                st.error("Erro de criptografia.")
+                st.error("Erro fatal de criptografia. Contate o admin.")
                 return
 
+            # 2. Encriptar com NOVO PIN
             new_enc = encrypt_string(target, new_pin_1)
             
+            # 3. Salvar
             if update_participant_pin(p['id'], new_pin_1, new_enc):
                 st.session_state.current_pin = new_pin_1
-                st.success("Senha definida!")
+                st.success("Senha atualizada com sucesso!")
                 time.sleep(1)
                 st.rerun()
             else:
-                st.error("Erro ao salvar.")
-        st.markdown("</div>", unsafe_allow_html=True)
+                st.error("Erro ao salvar no banco.")
         return
 
-    # TELA 3: REVELAÇÃO
+    # TELA 3: ENVELOPE (Revelação)
+
+    # Check data revelação
+    # draws(reveal_at) vem no join? Sim, fiz select "*, draws(reveal_at)" mas supabase-py retorna nested dict
     reveal_at_iso = p.get('draws', {}).get('reveal_at')
 
     if reveal_at_iso:
         reveal_dt = datetime.fromisoformat(reveal_at_iso.replace('Z', '+00:00'))
         if datetime.now(reveal_dt.tzinfo) < reveal_dt:
              st.markdown(f"""
-            <div class="wait-card">
-                <h3 class="wait-title">⏳ Psiu! Ainda não...</h3>
-                <p class="wait-text">A revelação será em:</p>
-                <div class="wait-date">{reveal_dt.strftime('%d/%m/%Y %H:%M')}</div>
+            <div class="custom-card" style="background-color: #FFF3CD; border: 2px solid #FFCA3A;">
+                <h3 style="color: #856404 !important;">⏳ Psiu! Ainda não...</h3>
+                <p style="color: #856404 !important; text-align: center;">A revelação será em:</p>
+                <h2 style="color: #D64045 !important;">{reveal_dt.strftime('%d/%m/%Y %H:%M')}</h2>
             </div>
             """, unsafe_allow_html=True)
              return
 
+    # Decriptar Envelope
     current_pin = st.session_state.current_pin
     target_name = decrypt_string(p['encrypted_target'], current_pin)
 
     if not target_name:
-        st.error("Erro ao abrir envelope. Faça login novamente.")
+        st.error("Não foi possível abrir o envelope. O PIN na sessão pode estar inválido. Faça login novamente.")
         if st.button("Sair"):
             st.session_state.clear()
             st.rerun()
         return
 
-    # EFEITO BALÕES
     st.balloons()
-
-    # CARD PREMIUM DE REVELAÇÃO
-    st.markdown(f"""
-    <div class="reveal-card">
-        <p class="reveal-title">SEU AMIGO SECRETO É</p>
-        <div class="name-badge">{target_name}</div>
-        <div class="shhh-box">
-            <span>🤫</span> Guarde segredo!
+    st.markdown("""
+        <div class="custom-card" style="background-color: #E63946; border: 2px solid #D62839;">
+            <h3 style="color: white !important;">🎉 VOCÊ TIROU:</h3>
+            <h1 style="color: #FFCA3A !important; font-size: 3em;">{}</h1>
+            <p style="color: white !important; text-align: center;">🤫 Shhh! Guarde segredo.</p>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """.format(target_name), unsafe_allow_html=True)
 
-    # CARD TROCA DE PIN (Discreto)
-    st.markdown("<br>", unsafe_allow_html=True)
+    # BOTÃO TROCAR PIN (Voluntário)
     with st.expander("🔒 Trocar meu PIN"):
-        st.caption("Use isso se achar que alguém descobriu sua senha.")
         cp_old = st.text_input("PIN Atual", type="password", key="cp_old")
         cp_new = st.text_input("Novo PIN", type="password", max_chars=6, key="cp_new")
         
