@@ -62,8 +62,7 @@ def create_draw_in_db(admin_pin: str, reveal_at: int, pairs: list) -> str:
     pairs: list of dicts { 'ownerName': ..., 'receiverName': ..., 'pin': ... }
     Retorna draw_id (uuid) ou None.
     """
-    if not supabase:
-        return None
+    if not supabase: return None
 
     try:
         # 1. Create Draw
@@ -72,8 +71,7 @@ def create_draw_in_db(admin_pin: str, reveal_at: int, pairs: list) -> str:
             "reveal_at": datetime.fromtimestamp(reveal_at / 1000).isoformat() if reveal_at else None
         }
         res_draw = supabase.table("draws").insert(draw_data).execute()
-        if not res_draw.data:
-            return None
+        if not res_draw.data: return None
         draw_id = res_draw.data[0]['id']
         
         # 2. Create Participants
@@ -106,8 +104,7 @@ def load_draw(draw_id: str, admin_pin: str):
     Carrega um sorteio existente, validando o ID e o PIN do Admin.
     Retorna (draw_data, error_message).
     """
-    if not supabase:
-        return None, "Erro de conexão com banco de dados."
+    if not supabase: return None, "Erro de conexão com banco de dados."
 
     try:
         # 1. Busca o sorteio pelo ID
@@ -131,8 +128,7 @@ def load_draw(draw_id: str, admin_pin: str):
 
 def get_draw_participants(draw_id: str):
     """Retorna lista de participantes de um sorteio."""
-    if not supabase:
-        return []
+    if not supabase: return []
     try:
         res = supabase.table("participants").select("*").eq("draw_id", draw_id).execute()
         return res.data
@@ -142,8 +138,7 @@ def get_draw_participants(draw_id: str):
 
 def get_participant(p_id: str):
     """Busca um participante pelo ID (UUID)."""
-    if not supabase:
-        return None
+    if not supabase: return None
     try:
         res = supabase.table("participants").select("*, draws(reveal_at)").eq("id", p_id).execute()
         if res.data:
@@ -158,8 +153,7 @@ def update_participant_pin(p_id: str, new_pin: str, new_encrypted_target: str):
     Atualiza o PIN final e o alvo recriptografado.
     Define must_change_pin = False.
     """
-    if not supabase:
-        return False
+    if not supabase: return False
     try:
         data = {
             "pin_final": new_pin,
@@ -179,8 +173,7 @@ def admin_reset_pin_db(p_id: str, new_initial_pin: str, new_encrypted_target: st
     Limpa pin_final.
     Atualiza pin_initial e encrypted_target (refeito).
     """
-    if not supabase:
-        return False
+    if not supabase: return False
     try:
         data = {
             "pin_initial": new_initial_pin,
@@ -228,8 +221,7 @@ def decrypt_string(token: str, pin: str) -> str:
     """Descriptografa para string."""
     try:
         missing_padding = len(token) % 4
-        if missing_padding:
-            token += '=' * (4 - missing_padding)
+        if missing_padding: token += '=' * (4 - missing_padding)
             
         json_token = base64.urlsafe_b64decode(token).decode('utf-8')
         token_data = json.loads(json_token)
@@ -263,6 +255,9 @@ def clean_names(text):
         # Remove espaços extras (ex: "  Maria   Silva  " -> "Maria Silva")
         normalized = re.sub(r'\s+', ' ', line).strip()
         if normalized:
+            # Capitaliza nome próprio (ex: "maria silva" -> "Maria Silva")
+            # Usa .title() mas preserva 'da', 'de' se quiséssemos ser perfeccionistas,
+            # mas title() simples é suficiente para requisito.
             cleaned.append(normalized.title())
     return cleaned
 
@@ -305,8 +300,7 @@ def generate_derangement(names):
 
 def format_date(ts_iso):
     """Formata data ISO para DD/MM/AAAA HH:mm"""
-    if not ts_iso:
-        return ""
+    if not ts_iso: return ""
     try:
         dt = datetime.fromisoformat(ts_iso.replace('Z', '+00:00'))
         return dt.strftime('%d/%m/%Y às %H:%M')
@@ -400,6 +394,31 @@ def inject_css():
         margin-top: 10px;
     }
 
+    /* CARD DE ESPERA (Ainda não...) */
+    .wait-card {
+        background-color: #FFF3CD;
+        border: 2px solid #FFEEBA;
+        color: #333;
+        padding: 30px;
+        border-radius: 12px;
+        text-align: center;
+        margin-top: 20px;
+    }
+    .wait-title {
+        color: #856404 !important;
+        font-weight: 800;
+        margin-top: 0;
+    }
+    .wait-text {
+        color: #444;
+        margin-bottom: 5px;
+    }
+    .wait-date {
+        color: #333;
+        font-weight: 700;
+        font-size: 24px;
+    }
+
     /* Card Padrão (Admin/Login) */
     .standard-card {
         background-color: white;
@@ -481,7 +500,7 @@ def main():
 
     st.markdown("""
     <div class='footer'>
-        Amigo Secreto v0.7.0 • Design Premium<br/>
+        Amigo Secreto v0.8.0 • Design Premium<br/>
         Segurança Reforçada: Admin não vê PIN final.
     </div>
     """, unsafe_allow_html=True)
@@ -489,12 +508,35 @@ def main():
 # --- ADMIN VIEWS ---
 
 def view_admin():
-    if 'admin_auth' not in st.session_state:
-        st.session_state.admin_auth = False
-    if 'current_draw_id' not in st.session_state:
-        st.session_state.current_draw_id = None
-    if 'admin_pin' not in st.session_state:
-        st.session_state.admin_pin = "654321"
+    # Inicializa sessão
+    if 'admin_logged' not in st.session_state:
+        st.session_state.admin_logged = False
+    if 'admin_auth' not in st.session_state: st.session_state.admin_auth = False
+    if 'current_draw_id' not in st.session_state: st.session_state.current_draw_id = None
+    if 'admin_pin' not in st.session_state: st.session_state.admin_pin = "654321"
+
+    # TELA DE LOGIN GERAL DO ADMIN
+    if not st.session_state.admin_logged:
+        st.title("🛡️ Acesso Restrito")
+        st.markdown("<div class='standard-card'>", unsafe_allow_html=True)
+        st.markdown("<p>Digite o PIN de Administrador para acessar a configuração.</p>", unsafe_allow_html=True)
+
+        pin = st.text_input("PIN Admin", type="password", max_chars=6, key="global_admin_pin")
+
+        if st.button("ENTRAR", type="primary"):
+            # Verifica PIN padrão (654321) ou personalizado se já definido
+            # Como ainda não carregamos sorteio, validamos contra o padrão de instalação
+            # Ou, se o usuário já tiver logado antes e a sessão caiu?
+            # Por simplicidade e requisito: "O PIN padrão continua sendo 654321"
+            if pin == "654321":
+                st.session_state.admin_logged = True
+                st.rerun()
+            else:
+                st.error("PIN incorreto.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
+    # SE LOGADO: MOSTRA O RESTO
 
     if not st.session_state.current_draw_id:
         st.title("🎅 Configurar Sorteio")
@@ -505,10 +547,8 @@ def view_admin():
             names_input = st.text_area("Participantes (um por linha)", height=150, placeholder="João\nMaria\nPedro", label_visibility="visible")
             
             col1, col2 = st.columns(2)
-            with col1:
-                reveal_date = st.date_input("Dia Revelação", value=None, format="DD/MM/YYYY")
-            with col2:
-                reveal_time = st.time_input("Hora Revelação", value=None)
+            with col1: reveal_date = st.date_input("Dia Revelação", value=None, format="DD/MM/YYYY")
+            with col2: reveal_time = st.time_input("Hora Revelação", value=None)
             
             admin_pin_input = st.text_input("PIN Admin (Padrão 654321)", value="654321", max_chars=6, type="password")
 
@@ -649,8 +689,7 @@ def view_participant(p_id):
     
     st.title(f"Olá, {p['name']}!")
 
-    if 'user_auth' not in st.session_state:
-        st.session_state.user_auth = False
+    if 'user_auth' not in st.session_state: st.session_state.user_auth = False
     
     # TELA 1: LOGIN
     if not st.session_state.user_auth:
@@ -719,10 +758,10 @@ def view_participant(p_id):
         reveal_dt = datetime.fromisoformat(reveal_at_iso.replace('Z', '+00:00'))
         if datetime.now(reveal_dt.tzinfo) < reveal_dt:
              st.markdown(f"""
-            <div class="custom-card" style="background-color: white; border: 2px solid #FFCA3A; color:#333;">
-                <h3 style="color: #F59F00 !important;">⏳ Psiu! Ainda não...</h3>
-                <p style="color: #666 !important;">A revelação será em:</p>
-                <h2 style="color: #333 !important;">{reveal_dt.strftime('%d/%m/%Y %H:%M')}</h2>
+            <div class="wait-card">
+                <h3 class="wait-title">⏳ Psiu! Ainda não...</h3>
+                <p class="wait-text">A revelação será em:</p>
+                <div class="wait-date">{reveal_dt.strftime('%d/%m/%Y %H:%M')}</div>
             </div>
             """, unsafe_allow_html=True)
              return
