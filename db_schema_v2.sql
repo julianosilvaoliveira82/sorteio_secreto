@@ -1,10 +1,10 @@
--- SQL for Amigo Secreto V2
+-- SQL for Amigo Secreto V2 (Secure Hashed)
 
 -- Table 1: Draws (Stores Admin/Config info)
 CREATE TABLE IF NOT EXISTS draws (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     created_at timestamptz DEFAULT now(),
-    admin_pin text NOT NULL,
+    admin_pin_hash text NOT NULL, -- Hashed
     reveal_at timestamptz
 );
 
@@ -13,17 +13,24 @@ CREATE TABLE IF NOT EXISTS participants (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     draw_id uuid REFERENCES draws(id) ON DELETE CASCADE,
     name text NOT NULL,
-
+    
     -- Encrypted target name (Accessible by User PIN)
-    encrypted_target text NOT NULL,
-
+    encrypted_target text NOT NULL, 
+    
     -- Encrypted target name (Accessible by Admin PIN for recovery/reset)
     admin_recovery_blob text NOT NULL,
-
-    pin_initial text NOT NULL,      -- Visible to Admin
-    pin_final text,                 -- Secret (User set)
+    
+    pin_initial_hash text NOT NULL, -- Hashed
+    pin_final_hash text,            -- Hashed
     must_change_pin boolean DEFAULT true,
-    created_at timestamptz DEFAULT now()
+    
+    created_at timestamptz DEFAULT now(),
+    
+    -- New columns for Audit & Rate Limiting
+    opened_at timestamptz,
+    failed_attempts int DEFAULT 0,
+    locked_until timestamptz,
+    last_activity_at timestamptz
 );
 
 -- Indexes for performance
