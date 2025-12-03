@@ -1,5 +1,5 @@
 /*
- * AMIGO SECRETO SEGURO (Client-side AES) - v0.3.0
+ * AMIGO SECRETO SEGURO (Client-side AES) - v0.4.0
  * 
  * AVISO DE SEGURANÇA E LIMITAÇÕES:
  * 1. Uso Recreativo: Este app foi projetado para grupos de família e amigos.
@@ -16,14 +16,43 @@ import { createRoot } from 'react-dom/client';
 // Declaração de tipos para evitar 'any' excessivo no CryptoJS
 interface CipherParams {
   toString: (encoder?: any) => string;
+  ciphertext: { toString: (encoder: any) => string };
+  iv: { toString: (encoder: any) => string };
 }
 interface AESStatic {
-  encrypt: (message: string, key: string) => CipherParams;
-  decrypt: (ciphertext: string, key: string) => { toString: (encoder: any) => string };
+  encrypt: (message: string, key: any, cfg?: any) => CipherParams;
+  decrypt: (ciphertext: any, key: any, cfg?: any) => { toString: (encoder: any) => string };
+}
+interface LibWordArray {
+  toString: (encoder?: any) => string;
+}
+interface EncHex {
+  parse: (str: string) => LibWordArray;
+}
+interface EncBase64 {
+  parse: (str: string) => LibWordArray;
+  stringify: (wordArray: LibWordArray) => string;
+}
+interface EncUtf8 {
+  parse: (str: string) => LibWordArray;
+}
+interface PBKDF2Static {
+    (password: string, salt: LibWordArray, cfg: any): LibWordArray;
 }
 interface CryptoStatic {
   AES: AESStatic;
-  enc: { Utf8: any };
+  enc: {
+      Utf8: any;
+      Base64: EncBase64;
+      Hex: EncHex;
+  };
+  lib: {
+      WordArray: { random: (n: number) => LibWordArray };
+  };
+  PBKDF2: PBKDF2Static;
+  algo: { SHA256: any };
+  mode: { CBC: any };
+  pad: { Pkcs7: any };
 }
 // Injetado via CDN no index.html
 declare const CryptoJS: CryptoStatic;
@@ -60,6 +89,8 @@ type StoredDraw = {
 };
 
 // --- 2. LIB (CRYPTO, LOGIC, STORAGE) ---
+
+const SALT_FIXO_STR = "AMIGO_SECRETO_SALT_2025";
 
 const Lib = {
   // Gera PIN numérico de 6 dígitos para o participante
@@ -98,19 +129,73 @@ const Lib = {
     };
   },
 
+  // Deriva chave consistente com o backend Python
+  getKey: (pin: string): LibWordArray => {
+      const salt = CryptoJS.enc.Utf8.parse(SALT_FIXO_STR);
+      return CryptoJS.PBKDF2(pin, salt, {
+          keySize: 256/32,
+          iterations: 10000,
+          hasher: CryptoJS.algo.SHA256
+      });
+  },
+
   // Criptografa objeto payload usando PIN como chave
   encryptPayload: (payload: SecurePayload, pin: string): string => {
-    return CryptoJS.AES.encrypt(JSON.stringify(payload), pin).toString();
+    try {
+        const key = Lib.getKey(pin);
+        const iv = CryptoJS.lib.WordArray.random(16);
+        const jsonStr = JSON.stringify(payload);
+
+        const encrypted = CryptoJS.AES.encrypt(jsonStr, key, {
+            iv: iv,
+            mode: CryptoJS.mode.CBC,
+            padding: CryptoJS.pad.Pkcs7
+        });
+
+        const tokenData = {
+            iv: CryptoJS.enc.Base64.stringify(iv),
+            ciphertext: CryptoJS.enc.Base64.stringify(encrypted.ciphertext)
+        };
+
+        const jsonToken = JSON.stringify(tokenData);
+        // URL Safe Base64
+        return btoa(jsonToken).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    } catch (e) {
+        console.error(e);
+        return "";
+    }
   },
 
   // Tenta descriptografar token. Retorna null se PIN errado ou corrompido.
   decryptPayload: (token: string, pin: string): SecurePayload | null => {
     try {
-      const bytes = CryptoJS.AES.decrypt(token, pin);
-      const decryptedString = bytes.toString(CryptoJS.enc.Utf8);
+      // Decode URL Safe Base64
+      let base64 = token.replace(/-/g, '+').replace(/_/g, '/');
+      const padLen = (4 - (base64.length % 4)) % 4;
+      base64 += "=".repeat(padLen);
+
+      const jsonToken = atob(base64);
+      const tokenData = JSON.parse(jsonToken);
+
+      const iv = CryptoJS.enc.Base64.parse(tokenData.iv);
+      const ciphertext = CryptoJS.enc.Base64.parse(tokenData.ciphertext);
+      const key = Lib.getKey(pin);
+
+      const decrypted = CryptoJS.AES.decrypt(
+          { ciphertext: ciphertext } as any,
+          key,
+          {
+              iv: iv,
+              mode: CryptoJS.mode.CBC,
+              padding: CryptoJS.pad.Pkcs7
+          }
+      );
+
+      const decryptedString = decrypted.toString(CryptoJS.enc.Utf8);
       if (!decryptedString) return null;
       return JSON.parse(decryptedString);
     } catch (e) {
+      console.error(e);
       return null;
     }
   },
@@ -180,7 +265,7 @@ const Lib = {
   }
 };
 
-const STORAGE_KEY = 'amigo_secreto_v3_backup';
+const STORAGE_KEY = 'amigo_secreto_v4_backup';
 
 // --- 3. COMPONENTS ---
 
@@ -288,7 +373,7 @@ const AdminSetup = ({ onGenerate, onRestore }: {
 
       <div className="actions-row">
         <button className="btn-sm btn-outline" onClick={handleClean}>🧹 Limpar Lista</button>
-        <button className="btn-sm btn-outline" onClick={handleResetForm}>🔄 Resetar Configuração</button>
+        <button className="btn-sm btn-outline" onClick={handleResetForm}>🔄 Resetar</button>
         <button className="btn-sm btn-outline" onClick={handleValidate}>✅ Validar</button>
       </div>
 
@@ -376,6 +461,7 @@ const AdminDashboard = ({ data, onReset }: { data: StoredDraw, onReset: () => vo
 
   const getShareLink = (owner: string, token: string) => {
     const baseUrl = "https://sorteioapp-2025.streamlit.app";
+    // Encode parameters as Streamlit expects
     return `${baseUrl}/?id=${encodeURIComponent(owner)}&t=${encodeURIComponent(token)}`;
   };
 
@@ -732,7 +818,7 @@ const App = () => {
       {content}
       
       <footer className="footer">
-        Amigo Secreto v0.3.0 • Criptografia AES Client-Side<br/>
+        Amigo Secreto v0.4.0 • Criptografia AES Client-Side<br/>
         Não há armazenamento em servidor. Dados salvos apenas no navegador e no link.
       </footer>
     </div>
