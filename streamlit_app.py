@@ -71,6 +71,7 @@ def create_draw_in_db(admin_pin: str, reveal_at_dt: datetime, pairs: list) -> st
                 "name": p['ownerName'],
                 "encrypted_target": enc_target,
                 "admin_recovery_blob": admin_blob,
+                "pin_initial": p['pin'],
                 "pin_initial_hash": hash_pin(p['pin']),
                 "pin_final_hash": None,
                 "must_change_pin": True,
@@ -135,6 +136,7 @@ def admin_reset_pin_db(p_id: str, new_initial_pin: str, new_encrypted_target: st
     if not supabase: return False
     try:
         data = {
+            "pin_initial": new_initial_pin,
             "pin_initial_hash": hash_pin(new_initial_pin),
             "pin_final_hash": None,
             "must_change_pin": True,
@@ -460,9 +462,12 @@ def view_admin():
         draw_id = st.session_state.current_draw_id
         st.title("📋 Painel Admin")
         st.caption(f"ID: {draw_id}")
-        
+
+        if st.session_state.get("last_reset_info"):
+            st.success(st.session_state.pop("last_reset_info"))
+
         participants = get_draw_participants(draw_id)
-        
+
         if participants:
             st.subheader("Status dos Participantes")
             status_data = []
@@ -484,6 +489,7 @@ def view_admin():
                 status_data.append({
                     "Nome": p['name'],
                     "Status": status_text,
+                    "PIN Inicial": p['pin_initial'] if p['must_change_pin'] else "",
                     "Erros": p['failed_attempts']
                 })
             st.dataframe(status_data, hide_index=True)
@@ -496,6 +502,9 @@ def view_admin():
                     link = f"https://sorteioapp-2025.streamlit.app/?id={p['id']}"
                     st.text_input("Link", value=link, key=f"lk_{p['id']}")
 
+                    if p['must_change_pin'] and p.get('pin_initial'):
+                        st.markdown(f"**🔑 PIN Inicial:** {p['pin_initial']}")
+
                     if st.button("🔄 Resetar PIN", key=f"rst_{p['id']}", type="primary"):
                         master_pin = st.session_state.admin_pin
                         admin_blob = p.get('admin_recovery_blob')
@@ -505,8 +514,8 @@ def view_admin():
                                 new_initial = generate_pin()
                                 new_enc = encrypt_string(target, new_initial)
                                 if admin_reset_pin_db(p['id'], new_initial, new_enc):
-                                    st.success(f"Novo PIN: {new_initial}")
-                                    time.sleep(5)
+                                    st.session_state["last_reset_info"] = f"Novo PIN para {p['name']}: {new_initial}"
+                                    st.rerun()
                                 else:
                                     st.error("Erro DB")
                             else:
