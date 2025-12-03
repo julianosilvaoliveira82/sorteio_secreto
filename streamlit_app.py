@@ -243,7 +243,24 @@ def decrypt_string(token: str, pin: str) -> str:
 # ==========================================
 
 def clean_names(text):
-    return [line.strip() for line in text.split('\n') if line.strip()]
+    """
+    Normaliza a lista de nomes:
+    1. Remove espaços duplos
+    2. Strip
+    3. Remove linhas vazias
+    4. Capitalização amigável
+    """
+    lines = text.split('\n')
+    cleaned = []
+    for line in lines:
+        # Remove espaços extras (ex: "  Maria   Silva  " -> "Maria Silva")
+        normalized = re.sub(r'\s+', ' ', line).strip()
+        if normalized:
+            # Capitaliza nome próprio (ex: "maria silva" -> "Maria Silva")
+            # Usa .title() mas preserva 'da', 'de' se quiséssemos ser perfeccionistas,
+            # mas title() simples é suficiente para requisito.
+            cleaned.append(normalized.title())
+    return cleaned
 
 def validate_names(names):
     duplicates = set([x for x in names if names.count(x) > 1])
