@@ -5,6 +5,7 @@ import hashlib
 import time
 import random
 import urllib.parse
+import re
 from datetime import datetime
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
