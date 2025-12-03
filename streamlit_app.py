@@ -62,7 +62,8 @@ def create_draw_in_db(admin_pin: str, reveal_at: int, pairs: list) -> str:
     pairs: list of dicts { 'ownerName': ..., 'receiverName': ..., 'pin': ... }
     Retorna draw_id (uuid) ou None.
     """
-    if not supabase: return None
+    if not supabase:
+        return None
 
     try:
         # 1. Create Draw
@@ -71,7 +72,8 @@ def create_draw_in_db(admin_pin: str, reveal_at: int, pairs: list) -> str:
             "reveal_at": datetime.fromtimestamp(reveal_at / 1000).isoformat() if reveal_at else None
         }
         res_draw = supabase.table("draws").insert(draw_data).execute()
-        if not res_draw.data: return None
+        if not res_draw.data:
+            return None
         draw_id = res_draw.data[0]['id']
         
         # 2. Create Participants
@@ -104,7 +106,8 @@ def load_draw(draw_id: str, admin_pin: str):
     Carrega um sorteio existente, validando o ID e o PIN do Admin.
     Retorna (draw_data, error_message).
     """
-    if not supabase: return None, "Erro de conexão com banco de dados."
+    if not supabase:
+        return None, "Erro de conexão com banco de dados."
 
     try:
         # 1. Busca o sorteio pelo ID
@@ -128,7 +131,8 @@ def load_draw(draw_id: str, admin_pin: str):
 
 def get_draw_participants(draw_id: str):
     """Retorna lista de participantes de um sorteio."""
-    if not supabase: return []
+    if not supabase:
+        return []
     try:
         res = supabase.table("participants").select("*").eq("draw_id", draw_id).execute()
         return res.data
@@ -138,7 +142,8 @@ def get_draw_participants(draw_id: str):
 
 def get_participant(p_id: str):
     """Busca um participante pelo ID (UUID)."""
-    if not supabase: return None
+    if not supabase:
+        return None
     try:
         res = supabase.table("participants").select("*, draws(reveal_at)").eq("id", p_id).execute()
         if res.data:
@@ -153,7 +158,8 @@ def update_participant_pin(p_id: str, new_pin: str, new_encrypted_target: str):
     Atualiza o PIN final e o alvo recriptografado.
     Define must_change_pin = False.
     """
-    if not supabase: return False
+    if not supabase:
+        return False
     try:
         data = {
             "pin_final": new_pin,
@@ -173,7 +179,8 @@ def admin_reset_pin_db(p_id: str, new_initial_pin: str, new_encrypted_target: st
     Limpa pin_final.
     Atualiza pin_initial e encrypted_target (refeito).
     """
-    if not supabase: return False
+    if not supabase:
+        return False
     try:
         data = {
             "pin_initial": new_initial_pin,
@@ -221,7 +228,8 @@ def decrypt_string(token: str, pin: str) -> str:
     """Descriptografa para string."""
     try:
         missing_padding = len(token) % 4
-        if missing_padding: token += '=' * (4 - missing_padding)
+        if missing_padding:
+            token += '=' * (4 - missing_padding)
             
         json_token = base64.urlsafe_b64decode(token).decode('utf-8')
         token_data = json.loads(json_token)
@@ -255,9 +263,6 @@ def clean_names(text):
         # Remove espaços extras (ex: "  Maria   Silva  " -> "Maria Silva")
         normalized = re.sub(r'\s+', ' ', line).strip()
         if normalized:
-            # Capitaliza nome próprio (ex: "maria silva" -> "Maria Silva")
-            # Usa .title() mas preserva 'da', 'de' se quiséssemos ser perfeccionistas,
-            # mas title() simples é suficiente para requisito.
             cleaned.append(normalized.title())
     return cleaned
 
@@ -300,7 +305,8 @@ def generate_derangement(names):
 
 def format_date(ts_iso):
     """Formata data ISO para DD/MM/AAAA HH:mm"""
-    if not ts_iso: return ""
+    if not ts_iso:
+        return ""
     try:
         dt = datetime.fromisoformat(ts_iso.replace('Z', '+00:00'))
         return dt.strftime('%d/%m/%Y às %H:%M')
@@ -483,9 +489,12 @@ def main():
 # --- ADMIN VIEWS ---
 
 def view_admin():
-    if 'admin_auth' not in st.session_state: st.session_state.admin_auth = False
-    if 'current_draw_id' not in st.session_state: st.session_state.current_draw_id = None
-    if 'admin_pin' not in st.session_state: st.session_state.admin_pin = "654321"
+    if 'admin_auth' not in st.session_state:
+        st.session_state.admin_auth = False
+    if 'current_draw_id' not in st.session_state:
+        st.session_state.current_draw_id = None
+    if 'admin_pin' not in st.session_state:
+        st.session_state.admin_pin = "654321"
 
     if not st.session_state.current_draw_id:
         st.title("🎅 Configurar Sorteio")
@@ -496,8 +505,10 @@ def view_admin():
             names_input = st.text_area("Participantes (um por linha)", height=150, placeholder="João\nMaria\nPedro", label_visibility="visible")
             
             col1, col2 = st.columns(2)
-            with col1: reveal_date = st.date_input("Dia Revelação", value=None, format="DD/MM/YYYY")
-            with col2: reveal_time = st.time_input("Hora Revelação", value=None)
+            with col1:
+                reveal_date = st.date_input("Dia Revelação", value=None, format="DD/MM/YYYY")
+            with col2:
+                reveal_time = st.time_input("Hora Revelação", value=None)
             
             admin_pin_input = st.text_input("PIN Admin (Padrão 654321)", value="654321", max_chars=6, type="password")
 
@@ -638,7 +649,8 @@ def view_participant(p_id):
     
     st.title(f"Olá, {p['name']}!")
 
-    if 'user_auth' not in st.session_state: st.session_state.user_auth = False
+    if 'user_auth' not in st.session_state:
+        st.session_state.user_auth = False
     
     # TELA 1: LOGIN
     if not st.session_state.user_auth:
