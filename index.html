@@ -4,13 +4,19 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Amigo Secreto Seguro</title>
+    <!-- Use CDN version for CryptoJS as it's cleaner for simple HTML apps -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
     <style>
       :root {
-        --color-primary: #D42F2F; /* Christmas Red */
-        --color-secondary: #1B5E20; /* Christmas Green */
-        --color-bg: #FFF8E1; /* Cream */
-        --color-text: #2C3E50;
+        --color-primary: #E63946; /* Vermelho Coral */
+        --color-secondary: #457B9D; /* Azul Petróleo Claro */
+        --color-bg: #FFF8E6; /* Beige Claro Suave */
+        --color-text: #2A2A2A; /* Cinza Escuro Neutro */
+        --color-card-bg: #1E1E24; /* Grafite Suave */
+        --color-card-text: #F1FAEE; /* Quase Branco */
+        --color-highlight: #FFCA3A; /* Amarelo Suave */
+        --color-title: #D64045; /* Vermelho Suave */
+
         --color-error: #ffebee;
         --color-error-text: #c62828;
         --color-success: #e8f5e9;
@@ -43,10 +49,16 @@
         border: 1px solid rgba(0,0,0,0.05);
       }
 
+      /* Inverted card style for visual consistency with prompt */
+      .card-dark {
+          background-color: var(--color-card-bg);
+          color: var(--color-card-text);
+      }
+
       .fade-in { animation: fadeIn 0.4s ease-out; }
       @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-      h2 { color: var(--color-primary); text-align: center; margin: 10px 0 20px; font-weight: 800; }
+      h2 { color: var(--color-title); text-align: center; margin: 10px 0 20px; font-weight: 800; }
       .header-icon { font-size: 40px; text-align: center; display: block; margin-bottom: 5px; }
       .subtitle { text-align: center; color: #666; margin-top: -10px; margin-bottom: 20px; font-size: 14px; }
 
@@ -64,6 +76,7 @@
         width: 100%; box-sizing: border-box; padding: 12px;
         border: 2px solid #ddd; border-radius: 8px; font-size: 16px;
       }
+      .input-field:focus { outline: none; border-color: var(--color-secondary); }
 
       .actions-row { display: flex; gap: 10px; margin-bottom: 16px; }
 
@@ -87,13 +100,6 @@
       
       .btn-sm { padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 6px; cursor: pointer; flex: 1; }
       
-      .btn-whatsapp {
-        background: #25D366; color: white; border: none; padding: 10px 16px;
-        border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer;
-        display: flex; align-items: center; justify-content: center; width: 100%;
-      }
-      .btn-whatsapp:hover { background: #128C7E; }
-
       /* Alerts */
       .alert { padding: 12px; border-radius: 8px; font-size: 14px; margin-bottom: 16px; }
       .alert-error { background: var(--color-error); color: var(--color-error-text); font-weight: 600; text-align: center; }
@@ -107,8 +113,19 @@
         display: flex; flex-direction: column; gap: 10px;
       }
       .item-info { display: flex; justify-content: space-between; align-items: center; }
-      .item-name { font-weight: 700; font-size: 16px; }
+      .item-name { font-weight: 700; font-size: 16px; color: var(--color-text); }
       .badge-sent { background: #e8f5e9; color: #2e7d32; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: bold; border: 1px solid #c8e6c9; }
+
+      .copy-textarea {
+          width: 100%;
+          border: 1px solid #eee;
+          border-radius: 4px;
+          padding: 8px;
+          font-size: 12px;
+          color: #666;
+          resize: none;
+          height: 60px;
+      }
 
       /* Participant View Specifics */
       .pin-input {
