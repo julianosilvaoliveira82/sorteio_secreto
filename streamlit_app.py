@@ -298,8 +298,47 @@ def inject_css():
     h1, h2, h3 { color: var(--accent-color) !important; font-weight: 700; text-align: center; }
     div[data-testid="stDataFrame"] { width: 100%; }
 
-    .reveal-card { background-color: var(--card-color); color: #FFF; padding: 40px; border-radius: 16px; text-align: center; margin: 20px 0; }
-    .name-badge { background-color: var(--highlight-color); color: white; font-size: 28px; font-weight: 800; padding: 15px 30px; border-radius: 50px; margin: 10px 0; display: inline-block; }
+    .reveal-card {
+        background-color: #D63B3B; /* fundo vermelho */
+        color: #FFFFFF !important; /* todo texto branco */
+        padding: 40px 20px;
+        border-radius: 16px;
+        text-align: center;
+        margin: 20px 0;
+    }
+
+    .reveal-title {
+        color: #FFFFFF !important;
+        font-size: 22px;
+        font-weight: 700;
+        margin-bottom: 10px;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+    }
+
+    .name-badge {
+        background-color: #1E90FF !important;
+        color: #FFFFFF !important;
+        font-size: 32px;
+        font-weight: 800;
+        padding: 15px 30px;
+        border-radius: 12px;
+        display: inline-block;
+        box-shadow: 0 4px 10px rgba(30, 144, 255, 0.4);
+        margin: 10px 0;
+    }
+
+    .shhh-box {
+        background-color: #FFE8A0;
+        color: #000000 !important; /* contraste adequado */
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-weight: 600;
+        margin-top: 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
 
     .standard-card { background-color: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 20px; border: 1px solid #EAEAEA; }
 
@@ -630,7 +669,7 @@ def view_participant(p_id):
     <div class="reveal-card">
         <p class="reveal-title">VOCÊ TIROU</p>
         <div class="name-badge">{target}</div>
-        <div class="shhh-box">🤫 Segredo!</div>
+        <div class="shhh-box">🤫 Guarde segredo!</div>
     </div>
     """, unsafe_allow_html=True)
 
