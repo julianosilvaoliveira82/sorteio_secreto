@@ -49,7 +49,7 @@ def hash_pin(pin: str) -> str:
 
 def create_draw_in_db(admin_pin: str, reveal_at_dt: datetime, pairs: list) -> str:
     if not supabase: return None
-    
+
     try:
         # 1. Create Draw (Store Hashed PIN)
         draw_data = {
@@ -65,7 +65,7 @@ def create_draw_in_db(admin_pin: str, reveal_at_dt: datetime, pairs: list) -> st
         for p in pairs:
             enc_target = encrypt_string(p['receiverName'], p['pin'])
             admin_blob = encrypt_string(p['receiverName'], admin_pin)
-            
+
             participants_data.append({
                 "draw_id": draw_id,
                 "name": p['ownerName'],
@@ -76,7 +76,7 @@ def create_draw_in_db(admin_pin: str, reveal_at_dt: datetime, pairs: list) -> st
                 "must_change_pin": True,
                 "failed_attempts": 0
             })
-            
+
         supabase.table("participants").insert(participants_data).execute()
         return draw_id
     except Exception as e:
@@ -91,7 +91,7 @@ def load_draw(draw_id: str, admin_pin: str):
         draw = res.data[0]
         
         # Validate Hash
-        if draw['admin_pin_hash'] != hash_pin(admin_pin): 
+        if draw['admin_pin_hash'] != hash_pin(admin_pin):
             return None, "PIN incorreto."
             
         return draw, None
@@ -154,7 +154,7 @@ def register_failed_attempt(p_id: str, current_fails: int):
     if not supabase: return
     new_fails = current_fails + 1
     update_data = {"failed_attempts": new_fails, "last_activity_at": datetime.now(BR_TZ).isoformat()}
-    
+
     lock_duration = 0
     if new_fails >= 10:
         lock_duration = 15
@@ -164,7 +164,7 @@ def register_failed_attempt(p_id: str, current_fails: int):
     if lock_duration > 0:
         unlock_time = datetime.now(BR_TZ).timestamp() + (lock_duration * 60)
         update_data["locked_until"] = datetime.fromtimestamp(unlock_time, BR_TZ).isoformat()
-    
+
     try:
         supabase.table("participants").update(update_data).eq("id", p_id).execute()
         return lock_duration
@@ -176,7 +176,7 @@ def register_success(p_id: str):
     """Reseta falhas e timestamps de atividade."""
     if not supabase: return
     update_data = {
-        "failed_attempts": 0, 
+        "failed_attempts": 0,
         "locked_until": None,
         "last_activity_at": datetime.now(BR_TZ).isoformat()
     }
@@ -214,7 +214,7 @@ def mark_participant_opened(p_id: str):
 
 SALT_FIXO = b"AMIGO_SECRETO_SALT_2025"
 ITERATIONS = 10000
-KEY_SIZE = 32 
+KEY_SIZE = 32
 
 def get_key(pin: str) -> bytes:
     return hashlib.pbkdf2_hmac('sha256', pin.encode('utf-8'), SALT_FIXO, ITERATIONS, dklen=KEY_SIZE)
@@ -297,8 +297,8 @@ def inject_css():
     .stApp { background-color: var(--bg-color); color: #333; font-family: 'Segoe UI', sans-serif; }
     h1, h2, h3 { color: var(--accent-color) !important; font-weight: 700; text-align: center; }
     div[data-testid="stDataFrame"] { width: 100%; }
-    
-    .reveal-card { 
+
+    .reveal-card {
         background-color: #D63B3B; /* fundo vermelho */
         color: #FFFFFF !important; /* todo texto branco */
         padding: 40px 20px;
@@ -306,7 +306,7 @@ def inject_css():
         text-align: center;
         margin: 20px 0;
     }
-    
+
     .reveal-title {
         color: #FFFFFF !important;
         font-size: 22px;
@@ -315,8 +315,8 @@ def inject_css():
         text-transform: uppercase;
         letter-spacing: 2px;
     }
-    
-    .name-badge { 
+
+    .name-badge {
         background-color: #1E90FF !important;
         color: #FFFFFF !important;
         font-size: 32px;
@@ -327,7 +327,7 @@ def inject_css():
         box-shadow: 0 4px 10px rgba(30, 144, 255, 0.4);
         margin: 10px 0;
     }
-    
+
     .shhh-box {
         background-color: #FFE8A0;
         color: #000000 !important; /* contraste adequado */
@@ -339,12 +339,12 @@ def inject_css():
         align-items: center;
         gap: 8px;
     }
-    
+
     .standard-card { background-color: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 20px; border: 1px solid #EAEAEA; }
-    
+
     .wait-card { background-color: #FFF3CD; border: 2px solid #FFEEBA; color: #333; padding: 30px; border-radius: 12px; text-align: center; margin-top: 20px; }
     .wait-title { color: #856404 !important; font-weight: 800; margin: 0; }
-    
+
     /* Login Card Style (Applied to st.container with border=True) */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: #FFFFFF !important;
@@ -353,7 +353,7 @@ def inject_css():
         padding: 24px !important;
         box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
     }
-    
+
     /* Fix for button alignment inside cards */
     .stButton { width: 100%; }
     </style>
@@ -364,17 +364,17 @@ def main():
     qp = st.query_params
     if qp.get("clean") == "1":
         st.session_state.clear()
-        # Remove param from URL to avoid loop/re-clean? 
-        # Streamlit doesn't easily allow clearing query params without rerun, 
+        # Remove param from URL to avoid loop/re-clean?
+        # Streamlit doesn't easily allow clearing query params without rerun,
         # but st.session_state.clear() wipes everything.
         # We continue.
 
     inject_css()
-    
+
     p_id = qp.get("id", None)
     if p_id: view_participant(p_id)
     else: view_admin()
-    
+
     st.markdown("<div style='text-align:center;color:#AAA;font-size:12px;margin-top:50px;'>Amigo Secreto v1.1.0 • Rate Limit Session • Opened Tracking</div>", unsafe_allow_html=True)
 
 # --- ADMIN ---
@@ -412,7 +412,7 @@ def view_admin():
                 admin_pin_input = st.text_input("PIN Admin (Padrão 654321)", value="654321", max_chars=6, type="password")
                 
                 submitted = st.form_submit_button("🎲 GERAR SORTEIO", type="primary")
-                
+
                 if submitted:
                     names = clean_names(names_input)
                     valid, msg = validate_names(names)
@@ -425,12 +425,12 @@ def view_admin():
                         else:
                             for p in pairs_list:
                                 p['pin'] = generate_pin()
-                            
+
                             ts_dt = None
                             if reveal_date and reveal_time:
                                 local_dt = datetime.combine(reveal_date, reveal_time)
                                 ts_dt = BR_TZ.localize(local_dt)
-                            
+
                             with st.spinner("Criando..."):
                                 draw_id = create_draw_in_db(admin_pin_input, ts_dt, pairs_list)
                                 if draw_id:
@@ -495,7 +495,7 @@ def view_admin():
                 with st.expander(f"👤 {p['name']}", expanded=False):
                     link = f"https://sorteioapp-2025.streamlit.app/?id={p['id']}"
                     st.text_input("Link", value=link, key=f"lk_{p['id']}")
-                    
+
                     if st.button("🔄 Resetar PIN", key=f"rst_{p['id']}", type="primary"):
                         master_pin = st.session_state.admin_pin
                         admin_blob = p.get('admin_recovery_blob')
@@ -543,7 +543,7 @@ def view_participant(p_id):
             return
 
     if 'user_auth' not in st.session_state: st.session_state.user_auth = False
-    
+
     # TELA 1: LOGIN
     if not st.session_state.user_auth:
         # 1) Rate Limiting Session Logic
@@ -555,9 +555,9 @@ def view_participant(p_id):
             with st.container(border=True):
                 st.markdown("<h3 style='text-align:center;'>Digite seu PIN</h3>", unsafe_allow_html=True)
                 st.markdown("<p style='text-align:center; color:#666;'>Use o PIN recebido para abrir seu envelope.</p>", unsafe_allow_html=True)
-                
+
                 pin_input = st.text_input("PIN", max_chars=6, type="password", key="login_pin", label_visibility="collapsed", placeholder="••••••")
-                
+
                 if st.button("ABRIR ENVELOPE", type="primary"):
                     # Check Session Block
                     if st.session_state.pin_block_until:
@@ -574,27 +574,27 @@ def view_participant(p_id):
                     if len(pin_input) != 6 or not pin_input.isdigit():
                         st.error("O PIN deve ter 6 números.")
                         # Do not increment attempts
-                        return 
+                        return
 
                     # Check Hash
                     input_hash = hash_pin(pin_input)
                     expected_hash = p['pin_initial_hash'] if p['must_change_pin'] else p['pin_final_hash']
-                    
+
                     if input_hash == expected_hash:
                         # Success: Reset Session Limits
                         st.session_state.pin_attempts = 0
                         st.session_state.pin_block_until = None
-                        
+
                         st.session_state.user_auth = True
                         st.session_state.current_pin = pin_input
-                        
+
                         # Only register success (reset DB failures)
-                        register_success(p['id']) 
+                        register_success(p['id'])
                         st.rerun()
                     else:
                         # Failure: Increment
                         st.session_state.pin_attempts += 1
-                        
+
                         if st.session_state.pin_attempts >= 3:
                             st.session_state.pin_block_until = time.time() + 30
                             st.session_state.pin_attempts = 0
@@ -606,7 +606,7 @@ def view_participant(p_id):
                         else:
                             st.error("PIN incorreto.")
                             register_failed_attempt(p['id'], p['failed_attempts'] or 0)
-                            
+
         return
 
     # TELA 2: TROCA OBRIGATÓRIA
@@ -618,7 +618,7 @@ def view_participant(p_id):
                 st.markdown("<p style='text-align:center;'>Crie um PIN secreto que só você sabe.</p>", unsafe_allow_html=True)
                 new_pin_1 = st.text_input("Novo PIN", max_chars=6, type="password", key="np1")
                 new_pin_2 = st.text_input("Confirme", max_chars=6, type="password", key="np2")
-                
+
                 if st.button("SALVAR E ABRIR", type="primary"):
                     if len(new_pin_1) == 6 and new_pin_1.isdigit() and new_pin_1 == new_pin_2:
                         if hash_pin(new_pin_1) == p['pin_initial_hash']:
