@@ -279,7 +279,7 @@ def generate_single_cycle(names):
     if len(names) < 2: return None
     pool = names[:]
     random.shuffle(pool)
-    
+
     pairs = []
     n = len(pool)
     for i in range(n):
@@ -287,6 +287,52 @@ def generate_single_cycle(names):
         receiver = pool[(i + 1) % n] # Wraps around
         pairs.append({'ownerName': giver, 'receiverName': receiver})
     return pairs
+
+def pairs_to_map(pairs):
+    """Converte a lista de pares em um mapa dono->alvo."""
+    return {p['ownerName']: p['receiverName'] for p in pairs}
+
+def validaSorteio(mapa: dict):
+    """Valida se um sorteio é derangement, sem 2-ciclos e com ciclo único."""
+    participantes = list(mapa.keys())
+    n = len(participantes)
+    if n < 3: return False, "Mínimo de 3 participantes."  # Mantém regra já existente
+
+    # (i) Sem auto-sorteio
+    for p in participantes:
+        if mapa[p] == p:
+            return False, f"Auto-sorteio detectado: {p}"
+
+    # (ii) Sem 2-ciclos
+    for p in participantes:
+        destino = mapa[p]
+        if destino in mapa and mapa[destino] == p:
+            return False, f"2-ciclo detectado: {p} <-> {destino}"
+
+    # (iii) Ciclo único
+    visitados = set()
+    atual = participantes[0]
+    for _ in range(n):
+        if atual in visitados:
+            return False, "Ciclo prematuro detectado"
+        visitados.add(atual)
+        atual = mapa.get(atual)
+        if atual is None:
+            return False, "Participante sem destino"
+    if atual != participantes[0] or len(visitados) != n:
+        return False, "Permutação não forma ciclo único"
+
+    # (iv) Revelação: último a revelar sorteia a primeira pessoa a revelar
+    primeiro = participantes[0]
+    sorteador_do_primeiro = None
+    for p, destino in mapa.items():
+        if destino == primeiro:
+            sorteador_do_primeiro = p
+            break
+    if not sorteador_do_primeiro:
+        return False, "Regra de revelação violada"
+
+    return True, "OK"
 
 # ==========================================
 # UI
