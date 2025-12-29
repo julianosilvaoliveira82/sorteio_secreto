@@ -1,5 +1,6 @@
+import random
 import unittest
-from streamlit_app import clean_names, validate_names, generate_derangement
+from streamlit_app import clean_names, validate_names, generate_single_cycle, pairs_to_map, validaSorteio
 
 class TestDrawLogic(unittest.TestCase):
     def test_clean_names(self):
@@ -21,22 +22,28 @@ class TestDrawLogic(unittest.TestCase):
         # Too few
         valid, msg = validate_names(["A", "B"])
         self.assertFalse(valid)
-        self.assertIn("pelo menos 3", msg.lower())
+        self.assertIn("mínimo de 3", msg.lower())
 
-    def test_derangement(self):
-        # Test 100 times to ensure robustness
-        names = ["A", "B", "C", "D"]
-        for _ in range(100):
-            result = generate_derangement(names)
-            self.assertIsNotNone(result)
-            self.assertEqual(len(result), len(names))
+    def _assert_single_cycle(self, names):
+        pairs = generate_single_cycle(names)
+        mapa = pairs_to_map(pairs)
+        valido, msg = validaSorteio(mapa)
+        self.assertTrue(valido, msg)
+        self.assertEqual(len(mapa), len(names))
 
-            # Check 1: No self-draw
-            for i, name in enumerate(names):
-                self.assertNotEqual(name, result[i])
+    def test_ciclos_pequenos(self):
+        self._assert_single_cycle(["Ana", "Bruno", "Carla"])
+        self._assert_single_cycle(["Ana", "Bruno", "Carla", "Diego"])
 
-            # Check 2: All drawn (set equality)
-            self.assertEqual(set(names), set(result))
+    def test_ciclo_maior(self):
+        nomes = [f"P{i}" for i in range(10)]
+        self._assert_single_cycle(nomes)
+
+    def test_propriedade_sem_2_ciclos(self):
+        nomes = ["A", "B", "C", "D", "E", "F"]
+        for seed in range(50):
+            random.seed(seed)
+            self._assert_single_cycle(nomes)
 
 if __name__ == "__main__":
     unittest.main()
